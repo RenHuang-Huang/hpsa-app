@@ -1015,7 +1015,7 @@ export default function App() {
               <Activity className="h-5 w-5 text-white" />
             </div>
             <div className={cn("transition-opacity duration-200", isSidebarOpen ? "opacity-100" : "opacity-0 invisible")}>
-              <span className="text-base font-bold tracking-tight text-slate-900 block">胃癌篩檢申報</span>
+              <span className="text-base font-bold tracking-tight text-slate-900 block">糞便抗原篩檢申報</span>
               <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 block">System v2.1</span>
             </div>
           </div>
