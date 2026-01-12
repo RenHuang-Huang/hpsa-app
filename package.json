@@ -1,7 +1,7 @@
 {
   "name": "hpsa-app",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "HpSA Team",
   "description": "HpSA Screening System Application",
   "type": "module",

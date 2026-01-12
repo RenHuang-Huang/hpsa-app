@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS inspection_results (
     -- 檢驗單號 (New)
     report_date TEXT NOT NULL,
     -- 報告日期 (ROC YYYMMDD)
+    fee INTEGER,
+    -- 檢驗金額
     -- Conditional Reagent (if Reagent Code = 999)
     other_reagent_zh TEXT,
     -- 其他試劑(中)
@@ -49,6 +51,8 @@ CREATE TABLE IF NOT EXISTS inspection_results (
     -- 二次試劑名稱
     second_report_date TEXT,
     -- 二次報告日期 (New)
+    second_fee INTEGER,
+    -- 二次檢驗金額
     -- Secondary Other Reagent (if Second Reagent Code = 999)
     second_other_reagent_zh TEXT,
     second_other_reagent_en TEXT,

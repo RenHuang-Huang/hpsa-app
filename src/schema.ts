@@ -58,6 +58,7 @@ export const formSchema = z.object({
     result: z.enum(['0', '1', '2'], { message: "請選擇檢驗結果" }),
     reagent_code: z.string().length(3, "試劑代碼需為 3 碼"),
     order_number: z.string().length(5, "檢驗單號需為 5 碼"),
+    fee: z.string().regex(/^\d*$/, "金額需為數字").optional(),
 
     // --- Other Reagent 1 (Conditional '999') ---
     other_reagent_zh: byteLimitedString(100, "其他中文品名").optional(),
@@ -80,6 +81,7 @@ export const formSchema = z.object({
     }),
 
     second_result: z.enum(['0', '1']).optional().or(z.literal('')), // '2' not allowed for second result? Image says "0, 1" for second? User spec: "15. second_result: 1 byte (Enum: '0', '1')"
+    second_fee: z.string().regex(/^\d*$/, "金額需為數字").optional(),
     second_reagent_code: z.string().max(3, "二次試劑編號最多 3 碼").optional(),
 
     // --- Other Reagent 2 (Conditional '999') ---

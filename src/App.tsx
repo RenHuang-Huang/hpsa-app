@@ -4,8 +4,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import {
   Activity, Plus, FileOutput, Search, Edit, Trash2, Printer, FileText,
-  LayoutDashboard, X, AlertCircle,
-  Calendar, Building2, User, Settings, Save, Archive, Database, Filter
+  LayoutDashboard, X, AlertCircle, CreditCard,
+  Calendar, Building2, User, Settings, Save, Archive, Database, Filter,
+  Download, Upload
 } from 'lucide-react';
 import { cn, toRocDate } from './lib/utils'; // Ensure this exists
 import { useToast } from './hooks/use-toast';
@@ -142,6 +143,7 @@ const Badge = ({ variant, children, ...props }: any) => {
 import { formSchema } from './schema';
 import { getPrintTemplate } from './printTemplate';
 import { isValidTaiwanID } from './lib/validators';
+import { getBillingTemplate, BillingItem } from "./billingTemplate";
 import reagentsData from './resources/reagents.json';
 
 // Reagent Codes 001-042
@@ -216,7 +218,13 @@ export default function App() {
   const [activeStatusMenu, setActiveStatusMenu] = useState<string | null>(null);
   const [records, setRecords] = useState<any[]>([]);
   const [hospitals, setHospitals] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>({ default_lab_id: '', default_reagent_code: '' });
+  const [settings, setSettings] = useState<any>({ default_lab_id: '', default_reagent_code: '', default_fee: '' });
+  // Billing State
+  const [billingHospital, setBillingHospital] = useState("");
+  const [billingStartDate, setBillingStartDate] = useState("");
+  const [billingEndDate, setBillingEndDate] = useState("");
+  const [billingDeduction, setBillingDeduction] = useState("0");
+
   const [dbConfig, setDbConfig] = useState<{ path: string, isCustom: boolean }>({ path: '', isCustom: false });
 
   // Auth State
@@ -306,12 +314,14 @@ export default function App() {
   const [isAdvancedSearchOpen, setIsAdvancedSearchOpen] = useState(false);
   const [advancedFilters, setAdvancedFilters] = useState({
     order_number: "",
-    lab_date: "",
+    lab_date_start: "",
+    lab_date_end: "",
     hospital_name: "",
     name: "",
     birth_date: "",
     id_no: "",
-    outpatient_date: "",
+    outpatient_date_start: "",
+    outpatient_date_end: "",
     result: "" as "" | "0" | "1" | "2", // "" means all
     is_printed: "" as "" | "0" | "1", // "" means all
     is_exported: "" as "" | "0" | "1" | "2" // "" means all
@@ -402,7 +412,7 @@ export default function App() {
   const loadSettings = async () => {
     if (ipc) {
       const data = await ipc.invoke('get-settings');
-      if (data) setSettings(data);
+      if (data) setSettings((prev: any) => ({ ...prev, ...data }));
     }
   };
 
@@ -429,6 +439,7 @@ export default function App() {
       lab_id: settings.default_lab_id || "",
       lab_date: toRocDate(new Date()),
       result: "" as any, // Default empty to force selection
+      fee: settings.default_fee || "",
       reagent_code: settings.default_reagent_code || "",
       order_number: "",
       report_date: toRocDate(new Date()),
@@ -443,6 +454,7 @@ export default function App() {
       second_outpatient_date: "",
       second_lab_date: "",
       second_result: "" as any, // Default empty
+      second_fee: "",
       second_reagent_code: "",
       second_report_date: "",
 
@@ -468,6 +480,7 @@ export default function App() {
       lab_id: record.lab_id,
       lab_date: record.lab_date,
       result: String(record.result) as any,
+      fee: (record.fee !== null && record.fee !== undefined) ? String(record.fee) : "",
       reagent_code: record.reagent_code,
       order_number: record.order_number || "",
       report_date: record.report_date,
@@ -481,6 +494,7 @@ export default function App() {
       second_outpatient_date: record.second_outpatient_date || "",
       second_lab_date: record.second_lab_date || "",
       second_result: ((record.second_result !== null && record.second_result !== undefined && record.second_result !== '') ? String(record.second_result) : "") as any,
+      second_fee: (record.second_fee !== null && record.second_fee !== undefined) ? String(record.second_fee) : "",
       second_reagent_code: record.second_reagent_code || "",
       second_report_date: record.second_report_date || "",
 
@@ -495,7 +509,15 @@ export default function App() {
 
   const onSubmitRecord = async (data: any) => {
     if (ipc) {
-      const payload = currentRecordUuid ? { ...data, uuid: currentRecordUuid } : data;
+      // Convert fees to numbers for DB storage
+      const payload = {
+        ...data,
+        fee: data.fee ? parseInt(data.fee, 10) : null,
+        second_fee: data.second_fee ? parseInt(data.second_fee, 10) : null
+      };
+
+      if (currentRecordUuid) payload.uuid = currentRecordUuid;
+
       await ipc.invoke('save-record', payload);
       loadRecords();
       setIsRecordDialogOpen(false);
@@ -521,7 +543,7 @@ export default function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab]);
+  }, [activeTab, handleOpenRecordDialog]);
 
   // Dialog Focus Fix
   useEffect(() => {
@@ -574,13 +596,50 @@ export default function App() {
       }
 
 
-      // Auto-detect gender from ID
-      if (name === 'id_no' && value.id_no && value.id_no.length >= 2) {
-        const secondChar = value.id_no.charAt(1);
-        if (secondChar === '1') {
-          form.setValue('gender', 'M');
-        } else if (secondChar === '2') {
-          form.setValue('gender', 'F');
+      // Auto-detect gender from ID & Auto-Uppercase
+      if (name === 'id_no' && value.id_no) {
+        const currentId = value.id_no;
+        const upperId = currentId.toUpperCase();
+
+        // 1. Auto-Uppercase
+        if (currentId !== upperId) {
+          form.setValue('id_no', upperId);
+          // Return early to let the next render cycle handle the uppercase value
+          // effectively "cleaning" the input before processing gender
+          return;
+        }
+
+        // 2. Gender Detection
+        if (upperId.length >= 2) {
+          const secondChar = upperId.charAt(1);
+          if (secondChar === '1' || secondChar === '8') {
+            form.setValue('gender', 'M');
+          } else if (secondChar === '2' || secondChar === '9') {
+            form.setValue('gender', 'F');
+          }
+        }
+      }
+
+      // Auto-fill Secondary Fee, Dates, and Reagent
+      if (name === 'second_outpatient_date' && value.second_outpatient_date && value.second_outpatient_date.length >= 1) {
+        const currentVal = form.getValues();
+        const todayRoc = toRocDate(new Date());
+
+        // Fee
+        if (!currentVal.second_fee && settings.default_fee) {
+          form.setValue("second_fee", settings.default_fee);
+        }
+        // Lab Date
+        if (!currentVal.second_lab_date) {
+          form.setValue("second_lab_date", todayRoc);
+        }
+        // Report Date
+        if (!currentVal.second_report_date) {
+          form.setValue("second_report_date", todayRoc);
+        }
+        // Reagent Code
+        if (!currentVal.second_reagent_code && settings.default_reagent_code) {
+          form.setValue("second_reagent_code", settings.default_reagent_code);
         }
       }
     });
@@ -695,6 +754,7 @@ export default function App() {
     if (ipc) {
       await ipc.invoke('save-setting', { key: 'default_lab_id', value: settings.default_lab_id });
       await ipc.invoke('save-setting', { key: 'default_reagent_code', value: settings.default_reagent_code });
+      await ipc.invoke('save-setting', { key: 'default_fee', value: settings.default_fee });
       await ipc.invoke('save-setting', { key: 'default_technologist', value: settings.default_technologist });
 
       // Save additional 999 fields
@@ -746,6 +806,38 @@ export default function App() {
   };
 
   // Export Handlers
+  // Backup / Restore Handlers
+  const handleBackupDatabase = async () => {
+    if (ipc) {
+      toast({ title: "備份中...", description: "請選擇儲存位置" });
+      const res = await ipc.invoke('backup-database');
+      if (res.success) {
+        toast({ title: "備份成功", description: `已儲存至: ${res.filePath}`, variant: "success" });
+      } else if (res.message !== '已取消') {
+        toast({ title: "備份失敗", description: res.message, variant: "destructive" });
+      }
+    }
+  };
+
+  const handleRestoreDatabase = async () => {
+    if (ipc) {
+      if (await ipc.invoke('show-confirm', { message: '警告：還原資料庫將會覆蓋現有所有資料，且無法復原。\n\n確定要繼續嗎？', type: 'warning', okLabel: '確定還原', cancelLabel: '取消' })) {
+        const res = await ipc.invoke('restore-database');
+        if (res.success) {
+          if (res.restartRequired) {
+            await ipc.invoke('show-alert', { message: '還原成功！應用程式將自動關閉，請重新開啟以完成還原程序。', title: '操作完成' });
+            await ipc.invoke('app-exit');
+          } else {
+            loadRecords();
+            toast({ title: "還原成功", description: "資料已更新", variant: "success" });
+          }
+        } else if (res.message !== '已取消') {
+          toast({ title: "還原失敗", description: res.message, variant: "destructive" });
+        }
+      }
+    }
+  };
+
   // Export Handlers
   const [exportMode, setExportMode] = useState<'all' | 'selected' | 'selected_del'>('all');
 
@@ -814,6 +906,69 @@ export default function App() {
       }
     }
   }
+
+  const handleGenerateBilling = async () => {
+    if (!billingHospital || !billingStartDate || !billingEndDate) {
+      toast({ title: "請填寫完整對帳資訊", variant: "destructive" });
+      return;
+    }
+    if (ipc) {
+      try {
+        const records = await ipc.invoke('get-records', {
+          startDate: billingStartDate,
+          endDate: billingEndDate,
+          hospitalId: billingHospital
+        });
+
+        const items: BillingItem[] = [];
+
+        records.forEach((r: any) => {
+          // Primary Check
+          if (r.lab_date >= billingStartDate && r.lab_date <= billingEndDate && r.hospital_id === billingHospital) {
+            if (r.fee && parseInt(r.fee, 10) > 0) {
+              items.push({
+                date: r.lab_date,
+                birth_date: r.birth_date,
+                name: r.name,
+                item: "胃幽門桿菌抗原檢測",
+                fee: parseInt(r.fee, 10)
+              });
+            }
+          }
+          // Secondary Check
+          if (r.second_lab_date && r.second_lab_date >= billingStartDate && r.second_lab_date <= billingEndDate && r.hospital_id === billingHospital) {
+            if (r.second_fee && parseInt(r.second_fee, 10) > 0) {
+              items.push({
+                date: r.second_lab_date,
+                birth_date: r.birth_date,
+                name: r.name,
+                item: "胃幽門桿菌抗原二次檢測",
+                fee: parseInt(r.second_fee, 10)
+              });
+            }
+          }
+        });
+
+        items.sort((a, b) => a.date.localeCompare(b.date));
+
+        const deduction = parseInt(billingDeduction, 10) || 0;
+        const hospitalName = hospitals.find(h => h.code === billingHospital)?.name || billingHospital;
+
+        const html = getBillingTemplate(settings.default_lab_name || '', hospitalName, billingStartDate, billingEndDate, items, deduction);
+
+        const win = window.open('', '_blank', 'width=1000,height=800');
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+        }
+
+      } catch (err) {
+        console.error(err);
+        toast({ title: "產生對帳單失敗", variant: "destructive" });
+      }
+    }
+  };
+
   /* Preview Template Logic */
   const handlePreviewTemplate = () => {
     // Helper local to this function or reused if extracted
@@ -1033,8 +1188,28 @@ export default function App() {
                 <span className={cn("transition-opacity duration-200 whitespace-nowrap", isSidebarOpen ? "opacity-100" : "opacity-0 w-0 hidden")}>檢驗紀錄管理</span>
               </Button>
               <Button
+                variant={activeTab === 'billing' ? 'secondary' : 'ghost'}
+                className={cn("w-full mb-1 flex justify-start items-center overflow-hidden", isSidebarOpen ? "px-4" : "px-0 justify-center")}
+                onClick={() => {
+                  setActiveTab('billing');
+                  // Set default dates: Last Month
+                  const date = new Date();
+                  const year = date.getFullYear();
+                  const month = date.getMonth(); // 0-indexed
+                  const lastMonthStart = new Date(year, month - 1, 1);
+                  const lastMonthEnd = new Date(year, month, 0);
+
+                  setBillingStartDate(toRocDate(lastMonthStart));
+                  setBillingEndDate(toRocDate(lastMonthEnd));
+                }}
+                title={!isSidebarOpen ? "費用對帳單" : ""}
+              >
+                <CreditCard className={cn("h-5 w-5 flex-shrink-0", isSidebarOpen ? "mr-2" : "")} />
+                <span className={cn("transition-opacity duration-200 whitespace-nowrap", isSidebarOpen ? "opacity-100" : "opacity-0 w-0 hidden")}>費用對帳單</span>
+              </Button>
+              <Button
                 variant={activeTab === 'settings' ? 'secondary' : 'ghost'}
-                className={cn("w-full flex justify-start items-center overflow-hidden", isSidebarOpen ? "px-4" : "px-0 justify-center")}
+                className={cn("w-full mb-1 flex justify-start items-center overflow-hidden", isSidebarOpen ? "px-4" : "px-0 justify-center")}
                 onClick={() => setActiveTab('settings')}
                 title={!isSidebarOpen ? "系統設定與維護" : ""}
               >
@@ -1071,6 +1246,21 @@ export default function App() {
                       }}>
                         Mock 100
                       </Button>
+                      <Button variant="ghost" className="text-xs text-slate-400 hover:text-slate-600 hover:bg-red-50 hover:text-red-500" onClick={async () => {
+                        if (ipc) {
+                          if (await ipc.invoke('show-confirm', { message: '⚠️ WARNING: DELETE ALL RECORDS?\n此動作無法復原！', type: 'warning', okLabel: 'Delete All', cancelLabel: 'Cancel' })) {
+                            const res = await ipc.invoke('clear-records');
+                            if (res.success) {
+                              toast({ title: "Records Cleared", variant: "success" });
+                              loadRecords();
+                            } else {
+                              toast({ title: "Failed", description: res.message, variant: "destructive" });
+                            }
+                          }
+                        }
+                      }}>
+                        <Trash2 className="h-4 w-4 mr-1" /> Clear All
+                      </Button>
                       <Button variant="ghost" className="text-xs text-slate-400 hover:text-indigo-600" onClick={handlePreviewTemplate}>
                         <FileText className="h-4 w-4 mr-1" /> 樣板預覽
                       </Button>
@@ -1092,9 +1282,9 @@ export default function App() {
                       <div className="flex items-baseline gap-3">
                         <h2 className="text-lg font-bold text-slate-800">最近檢驗紀錄</h2>
                         {(() => {
-                          const isDefault = !search && !searchStartDate && !searchEndDate;
-                          let displayStart = searchStartDate;
-                          let displayEnd = searchEndDate;
+                          const isDefault = !search && !searchStartDate && !searchEndDate && !advancedFilters.lab_date_start && !advancedFilters.lab_date_end;
+                          let displayStart = advancedFilters.lab_date_start || searchStartDate;
+                          let displayEnd = advancedFilters.lab_date_end || searchEndDate;
 
                           if (isDefault) {
                             const now = new Date();
@@ -1156,11 +1346,11 @@ export default function App() {
 
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
-                        <div className="relative w-64">
+                        <div className="relative w-32">
                           <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                           <input
                             type="text"
-                            placeholder="搜尋姓名、身分證或院所..."
+                            placeholder="姓名/ID/院所"
                             className="flex h-10 w-full rounded-md border border-slate-200 bg-slate-50 px-3 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all font-mono"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -1208,7 +1398,7 @@ export default function App() {
                           setSearchStartDate("");
                           setSearchEndDate("");
                           setAdvancedFilters({
-                            order_number: "", lab_date: "", hospital_name: "", name: "", birth_date: "", id_no: "", outpatient_date: "", result: "" as any, is_printed: "" as any, is_exported: "" as any
+                            order_number: "", lab_date_start: "", lab_date_end: "", hospital_name: "", name: "", birth_date: "", id_no: "", outpatient_date_start: "", outpatient_date_end: "", result: "" as any, is_printed: "" as any, is_exported: "" as any
                           });
                           setIsAdvancedSearchOpen(false);
                           loadRecords({ search: "", startDate: "", endDate: "", filters: null });
@@ -1242,19 +1432,34 @@ export default function App() {
                             </div>
                             <div className="space-y-2">
                               <Label>檢驗日期</Label>
-                              <RocDateInput
-                                value={advancedFilters.lab_date}
-                                onChange={(e: any) => setAdvancedFilters({ ...advancedFilters, lab_date: e.target.value })}
-                                placeholder="___/__/__"
-                              />
+                              <div className="flex gap-2">
+                                <RocDateInput
+                                  value={advancedFilters.lab_date_start}
+                                  onChange={(e: any) => setAdvancedFilters({ ...advancedFilters, lab_date_start: e.target.value })}
+                                  placeholder="起"
+                                  className="w-full"
+                                />
+                                <span className="pt-2 text-slate-400">-</span>
+                                <RocDateInput
+                                  value={advancedFilters.lab_date_end}
+                                  onChange={(e: any) => setAdvancedFilters({ ...advancedFilters, lab_date_end: e.target.value })}
+                                  placeholder="訖"
+                                  className="w-full"
+                                />
+                              </div>
                             </div>
                             <div className="space-y-2">
                               <Label>院所名稱/代碼</Label>
-                              <Input
+                              <select
+                                className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                                 value={advancedFilters.hospital_name}
-                                onChange={(e: any) => setAdvancedFilters({ ...advancedFilters, hospital_name: e.target.value })}
-                                placeholder="輸入名稱關鍵字"
-                              />
+                                onChange={(e) => setAdvancedFilters({ ...advancedFilters, hospital_name: e.target.value })}
+                              >
+                                <option value="">全部 (或輸入關鍵字搜尋)</option>
+                                {hospitals.map(h => (
+                                  <option key={h.code} value={h.name}>{h.name}</option>
+                                ))}
+                              </select>
                             </div>
                             <div className="space-y-2">
                               <Label>姓名</Label>
@@ -1282,11 +1487,21 @@ export default function App() {
                             </div>
                             <div className="space-y-2">
                               <Label>門診日期</Label>
-                              <RocDateInput
-                                value={advancedFilters.outpatient_date}
-                                onChange={(e: any) => setAdvancedFilters({ ...advancedFilters, outpatient_date: e.target.value })}
-                                placeholder="___/__/__"
-                              />
+                              <div className="flex gap-2">
+                                <RocDateInput
+                                  value={advancedFilters.outpatient_date_start}
+                                  onChange={(e: any) => setAdvancedFilters({ ...advancedFilters, outpatient_date_start: e.target.value })}
+                                  placeholder="起"
+                                  className="w-full"
+                                />
+                                <span className="pt-2 text-slate-400">-</span>
+                                <RocDateInput
+                                  value={advancedFilters.outpatient_date_end}
+                                  onChange={(e: any) => setAdvancedFilters({ ...advancedFilters, outpatient_date_end: e.target.value })}
+                                  placeholder="訖"
+                                  className="w-full"
+                                />
+                              </div>
                             </div>
                             <div className="space-y-2">
                               <Label>檢驗結果</Label>
@@ -1331,7 +1546,7 @@ export default function App() {
                         <div className="p-6 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
                           <Button variant="ghost" onClick={() => {
                             setAdvancedFilters({
-                              order_number: "", lab_date: "", hospital_name: "", name: "", birth_date: "", id_no: "", outpatient_date: "", result: "" as any, is_printed: "" as any, is_exported: "" as any
+                              order_number: "", lab_date_start: "", lab_date_end: "", hospital_name: "", name: "", birth_date: "", id_no: "", outpatient_date_start: "", outpatient_date_end: "", result: "" as any, is_printed: "" as any, is_exported: "" as any
                             });
                           }}>重置條件</Button>
                           <Button onClick={() => {
@@ -1523,6 +1738,75 @@ export default function App() {
             </>
           )}
 
+          {activeTab === 'billing' && (
+            <div className="flex flex-1 flex-col overflow-hidden bg-slate-50/50">
+              <header className="flex h-14 items-center justify-between border-b bg-white px-6">
+                <h1 className="text-lg font-semibold text-slate-900">費用對帳單</h1>
+              </header>
+              <main className="flex-1 overflow-auto p-6">
+                <div className="mx-auto max-w-2xl space-y-6">
+                  <div className="rounded-lg border bg-card text-card-foreground shadow-sm bg-white p-6 space-y-4">
+                    <div className="space-y-2">
+                      <Label>醫療院所</Label>
+                      <select
+                        className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3"
+                        value={billingHospital}
+                        onChange={(e) => setBillingHospital(e.target.value)}
+                      >
+                        <option value="">請選擇診所</option>
+                        {hospitals.map(h => (
+                          <option key={h.code} value={h.code}>{h.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>開始日期</Label>
+                        <RocDateInput
+                          value={billingStartDate}
+                          placeholder="YYYMMDD"
+                          onChange={(e: any) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setBillingStartDate(val);
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>結束日期</Label>
+                        <RocDateInput
+                          value={billingEndDate}
+                          placeholder="YYYMMDD"
+                          onChange={(e: any) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            setBillingEndDate(val);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>預扣試管金額 (元)</Label>
+                      <Input
+                        value={billingDeduction}
+                        onChange={(e: any) => {
+                          const val = e.target.value.replace(/\D/g, '');
+                          setBillingDeduction(val);
+                        }}
+                      />
+                    </div>
+
+                    <div className="pt-4">
+                      <Button className="w-full" onClick={handleGenerateBilling}>
+                        產生對帳單 (列印)
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </main>
+            </div>
+          )}
+
           {/* SETTINGS TAB */}
           {activeTab === 'settings' && (
             <div className="p-8 space-y-8 overflow-auto">
@@ -1544,6 +1828,10 @@ export default function App() {
                       {dbConfig.isCustom && (
                         <Button variant="destructive" onClick={handleResetDbPath}>重設預設值</Button>
                       )}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button variant="outline" onClick={handleBackupDatabase} className="gap-2"><Download className="h-4 w-4" /> 備份資料庫</Button>
+                      <Button variant="outline" onClick={handleRestoreDatabase} className="gap-2 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-200"><Upload className="h-4 w-4" /> 還原資料庫</Button>
                     </div>
                     <p className="text-xs text-slate-400">
                       {dbConfig.isCustom ? '目前使用自訂路徑' : '目前使用系統預設路徑'}
@@ -1598,6 +1886,18 @@ export default function App() {
                       ))}
                     </select>
                   </div>
+                  <div className="space-y-2">
+                    <Label>預設檢驗金額</Label>
+                    <Input
+                      value={settings.default_fee || ''}
+                      onChange={(e: any) => {
+                        const val = e.target.value.replace(/\D/g, ''); // Number only
+                        setSettings({ ...settings, default_fee: val });
+                      }}
+                      placeholder="例如: 100"
+                    />
+                  </div>
+
                   {settings.default_reagent_code === '999' && (
                     <>
                       <div className="space-y-2 col-span-2 border-t border-slate-100 pt-4 mt-2 grid grid-cols-2 gap-4">
@@ -1638,7 +1938,7 @@ export default function App() {
                           )}
                         </div>
                         <div className="space-y-2">
-                          <Label>試劑有效期限 (ROC)</Label>
+                          <Label>試劑許可證有效期限 (ROC)</Label>
                           <RocDateInput
                             value={settings.default_other_expire_date || ''}
                             onChange={(e: any) => setSettings({ ...settings, default_other_expire_date: e.target.value })}
@@ -1864,6 +2164,17 @@ export default function App() {
                         </select>
                       </div>
                       <div className="space-y-2">
+                        <Label>檢驗金額</Label>
+                        <Input
+                          {...form.register("fee")}
+                          placeholder="金額"
+                          onChange={(e: any) => {
+                            const val = e.target.value.replace(/\D/g, '');
+                            form.setValue("fee", val);
+                          }}
+                        />
+                      </div>
+                      <div className="space-y-2">
                         <Label>檢驗機構代碼</Label>
                         <Input {...form.register("lab_id")} />
                         {form.formState.errors.lab_id && <p className="text-xs text-red-500 mt-1">{form.formState.errors.lab_id.message}</p>}
@@ -1975,6 +2286,17 @@ export default function App() {
                             <option value="1">陽性 (+)</option>
                           </select>
                           {form.formState.errors.second_result && <p className="text-xs text-red-500 mt-1">{form.formState.errors.second_result.message}</p>}
+                        </div>
+                        <div className="space-y-2">
+                          <Label>二次檢驗金額</Label>
+                          <Input
+                            {...form.register("second_fee")}
+                            placeholder="金額"
+                            onChange={(e: any) => {
+                              const val = e.target.value.replace(/\D/g, '');
+                              form.setValue("second_fee", val);
+                            }}
+                          />
                         </div>
                         <div className="space-y-2">
                           <Label>二次試劑代碼</Label>

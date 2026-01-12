@@ -94,7 +94,10 @@ export function initDb() {
       "ALTER TABLE inspection_results ADD COLUMN second_other_expire_date TEXT",
       // New Settings for Lab Name and Print Title
       "ALTER TABLE settings ADD COLUMN default_lab_name TEXT",
-      "ALTER TABLE settings ADD COLUMN print_title_source TEXT"
+      "ALTER TABLE settings ADD COLUMN print_title_source TEXT",
+      // Fee Columns
+      "ALTER TABLE inspection_results ADD COLUMN fee INTEGER",
+      "ALTER TABLE inspection_results ADD COLUMN second_fee INTEGER"
     ];
 
     for (const sql of migrations) {

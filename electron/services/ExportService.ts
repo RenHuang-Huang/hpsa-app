@@ -65,6 +65,17 @@ export class ExportService {
 
             // If we can't write, we shouldn't update the DB either, but for now let's write first
             try {
+                // Write Header for CSV
+                if (format === 'csv') {
+                    let headerStr = '';
+                    if (mode === 'deletion') {
+                        headerStr = '個案身分證號或居留證號(外籍),採檢單位代碼,門診日期,二次-門診日期';
+                    } else {
+                        headerStr = '個案身分證號或居留證號(外籍),採檢單位代碼,門診日期,檢驗機構代碼,檢驗日期,檢驗結果,定量試劑商品名稱,其他_定量試劑商品名稱(中文),其他_定量試劑商品名稱(英文),其他_定量試劑商品許可證字號,其他_定量試劑商品有效期限,報告日期,二次-門診日期,二次-檢驗日期,二次-檢驗結果,二次-定量試劑商品名稱,其他_定量試劑商品名稱(中文),其他_定量試劑商品名稱(英文),其他_定量試劑商品許可證字號,其他_定量試劑商品有效期限,二次-報告日期';
+                    }
+                    fileStream.write(iconv.encode(headerStr + '\r\n', 'Big5'));
+                }
+
                 const updateStmt = this.db.prepare('UPDATE inspection_results SET is_exported = 1 WHERE uuid = ?');
                 for (const record of (records as any[])) {
                     let lineBuffers: Buffer[] = [];
