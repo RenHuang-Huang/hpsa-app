@@ -8,16 +8,16 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
       font-family: 'BiauKai';
       src: local('BiauKai'), local('DFKai-SB'), local('KaiTi');
     }
-    body { 
-      font-family: "BiauKai", "DFKai-SB", "KaiTi", "標楷體", serif; 
-      padding: 40px; 
+    body {
+      font-family: "BiauKai", "DFKai-SB", "KaiTi", "標楷體", serif;
+      padding: 40px;
       margin: 0;
       color: #000;
       -webkit-print-color-adjust: exact;
     }
-    .page { 
-      page-break-after: always; 
-      position: relative; 
+    .page {
+      page-break-after: always;
+      position: relative;
       min-height: 200mm; /* Use min-height instead of fixed height */
       height: auto;
       box-sizing: border-box;
@@ -37,14 +37,14 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
         page-break-inside: avoid;
       }
     }
-    
+
     /* Header */
-    .header { 
-      text-align: center; 
-      font-size: 36px; 
+    .header {
+      text-align: center;
+      font-size: 36px;
       font-weight: normal;
-      margin-bottom: 25px; 
-      color: #2b4c85; 
+      margin-bottom: 25px;
+      color: #2b4c85;
       letter-spacing: 5px;
     }
     .center{
@@ -56,7 +56,7 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
     .info-sex { margin-right: 10px; }
     .info-id { margin-right: 10px; }
     .info-date { margin-right: 10px; }
-    
+
     .blue-text { color: #2b4c85; }
     .red-text { color: red; font-weight: bold; }
 
@@ -64,6 +64,7 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
     .table-container {
       margin-top: 10px;
     }
+      /* none-use */
     .category-box {
       border: 1px solid #2b4c85;
       display: inline-block;
@@ -73,47 +74,64 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
       color: #2b4c85;
     }
     .info-table {
-          width: 100%;
-          margin-bottom: 8px;
-          border-collapse: collapse;
-        }
-        .info-table td {
-          padding: 0 15px 0 0; /* Mimic margin-right for items */
-          white-space: nowrap;
-          font-size: 16px; 
-        }
-    table { width: 100%; border-collapse: collapse; }
-    .table-container{
-      font-size: 14px;
+      width: 100%;
+      margin-bottom: 8px;
+      border-collapse: collapse;
     }
-    th { 
-      background-color: #f3f2bdff; 
-      border: 1px solid #2b4c85; 
-      
-      padding: 8px; 
-      font-weight: normal; 
+    .info-table td {
+      padding: 0 15px 0 0; /* Mimic margin-right for items */
+      white-space: nowrap;
+      font-size: 18px;
+    }
+    table { width: 100%; border-collapse: collapse; }
+    .table-container {
+      font-size: 18px;
+    }
+
+    /* Special styling for result table to allow rounded corners */
+    .table-container table {
+      border-collapse: separate;
+      border-spacing: 0; /* Merge cells visually */
+    }
+
+    th {
+      background-color: #f3f2bdff;
+      border: 1px solid #2b6985ff;
+      padding: 3px;
+      font-weight: normal;
       color: #e00404ff;
       text-align: center;
+      border-right: none; /* Prevent double borders */
     }
-    .table-container td { 
-      padding: 5px; 
+    th:last-child {
+      border-right: 1px solid #2b4c85; /* Restore right border for last item */
+      border-top-right-radius: 5px;
+      border-bottom-right-radius: 5px;
     }
-    
+    th:first-child {
+      border-top-left-radius: 5px;
+      border-bottom-left-radius: 5px;
+    }
+
+    .table-container td {
+      padding: 5px;
+    }
+
     /* Footer */
-    .footer { 
-      margin-top: 30px; 
-      display: flex; 
-      justify-content: space-between; 
+    .footer {
+      margin-top: 5px;
+      display: flex;
+      justify-content: space-between;
       align-items: flex-end;
       font-size: 16px;
       position: relative;
     }
-    .footer-note { 
+    .footer-note {
       width: 100%;
       display: flex;
       justify-content: space-between;
       color: red;
-      font-size: 14px;
+      font-size: 16px;
     }
     .footer-date { margin-left: auto; margin-right: 150px; }
 
@@ -127,21 +145,21 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
       align-items: center;
     }
     .stamp {
-       width: 40px; 
-       height: 40px; 
-       border: 2px solid #e11d48;
-       border-radius: 50%; 
+       width: 50px;
+       height: 50px;
+       border: 1px solid #e11d48;
+       border-radius: 50%;
        color: #e11d48;
        display: flex; flex-direction: column; align-items: center; justify-content: center;
-       font-size: 12px; 
+       font-size: 14px;
        line-height: 1.2;
     }
-        
+
     .stamp::before {
         content: "";
         position: absolute;
         width: 100%;
-        height: 2px;
+        height: 1px;
         background: #e11d48;
     }
     @media print {
@@ -171,9 +189,9 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
           <thead>
             <tr>
               <th width="20%">檢 查 項 目</th>
-              <th width="20%">中 文 名 稱</th>
+              <th width="25%">中 文 名 稱</th>
               <th width="20%">檢 查 結 果</th>
-              <th width="15%">單 位</th>
+              <th width="10%">單 位</th>
               <th width="25%">正 常 參 考 值</th>
             </tr>
           </thead>
@@ -205,7 +223,7 @@ export const getPrintTemplate = (repo: any, options: { autoPrint: boolean } = { 
         </div>
       </div>
    </div>
-   
+
    ${options.autoPrint ? `
    <script>
       window.onload = () => { window.print(); window.close(); }

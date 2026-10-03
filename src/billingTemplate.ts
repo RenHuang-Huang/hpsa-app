@@ -22,7 +22,7 @@ export const getBillingTemplate = (
   // Let's rely on standard table flow and use print css for basic page breaks if needed.
   // Or just a single continuous table which browser paginates.
 
-  const rowsHtml = items.map((item, index) => `
+  const rowsHtml = items.map((item) => `
     <tr>
       <td style="text-align: center;">${item.date}</td>
       <td style="text-align: center;">${item.birth_date}</td>
@@ -41,11 +41,11 @@ export const getBillingTemplate = (
   <style>
     body { font-family: "Microsoft JhengHei", sans-serif; padding: 20px; }
     h2 { text-align: center; margin-bottom: 5px; }
-    .meta { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 14px; }
+    .meta { display: flex; justify-content: space-between; margin-bottom: 20px; font-size: 16px; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-    th, td { border: 1px solid #000; padding: 8px 4px; font-size: 14px; }
+    th, td { border: 1px solid #000; padding: 8px 4px; font-size: 16px; }
     th { background-color: #f0f0f0; }
-    .footer { text-align: right; font-size: 16px; margin-top: 20px; }
+    .footer { text-align: right; font-size: 18px; margin-top: 20px; }
     .footer div { margin-bottom: 5px; }
     
     @media print {

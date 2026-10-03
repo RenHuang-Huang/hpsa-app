@@ -218,7 +218,7 @@ export default function App() {
   const [activeStatusMenu, setActiveStatusMenu] = useState<string | null>(null);
   const [records, setRecords] = useState<any[]>([]);
   const [hospitals, setHospitals] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>({ default_lab_id: '', default_reagent_code: '', default_fee: '' });
+  const [settings, setSettings] = useState<any>({ default_lab_id: '', default_reagent_code: '', default_fee: '', export_format: 'csv' });
   // Billing State
   const [billingHospital, setBillingHospital] = useState("");
   const [billingStartDate, setBillingStartDate] = useState("");
@@ -1305,43 +1305,7 @@ export default function App() {
                           return null;
                         })()}
                       </div>
-                      {selectedRecordUuids.length > 0 && (
-                        <div className="flex gap-2">
-                          <Button variant="secondary" className="gap-2 h-8" onClick={async () => {
-                            const recordsToPrint = records.filter(r => selectedRecordUuids.includes(r.uuid));
 
-                            const hasSecondResult = recordsToPrint.some(r => r.second_result !== null && r.second_result !== undefined && String(r.second_result).trim() !== '');
-
-                            let choice = 'first';
-                            if (hasSecondResult && ipc) {
-                              const response = await ipc.invoke('show-message-box', {
-                                type: 'question',
-                                title: '選擇列印報告',
-                                message: '偵測到部分紀錄包含二次檢驗結果，請選擇要列印的報告：',
-                                buttons: ['第一次報告', '第二次報告', '全部列印', '取消'],
-                                cancelId: 3
-                              });
-                              if (response === 0) choice = 'first';
-                              else if (response === 1) choice = 'second';
-                              else if (response === 2) choice = 'both';
-                              else return;
-                            }
-
-                            handlePrint(recordsToPrint, choice as 'first' | 'second' | 'both');
-                          }}>
-                            <Printer className="h-4 w-4" /> 列印選取 ({selectedRecordUuids.length})
-                          </Button>
-                          <Button variant="secondary" className="gap-2 h-8" onClick={() => handleOpenExportDialog('selected')}>
-                            <FileOutput className="h-4 w-4" /> 匯出選取
-                          </Button>
-                          {records.filter(r => selectedRecordUuids.includes(r.uuid)).every(r => Number(r.is_exported) === 1) && (
-                            <Button variant="secondary" className="gap-2 h-8 bg-red-100 text-red-700 hover:bg-red-200" onClick={() => handleOpenExportDialog('selected_del')}>
-                              <Trash2 className="h-4 w-4" /> 匯出欲刪除資料
-                            </Button>
-                          )}
-                        </div>
-                      )
-                      }
                     </div>
 
                     <div className="flex items-center gap-4">
@@ -1408,6 +1372,43 @@ export default function App() {
                       )}
                     </div>
                   </div>
+                  {/* Selection Toolbar (New Line) */}
+                  {selectedRecordUuids.length > 0 && (
+                    <div className="px-5 py-2 border-b border-slate-100 bg-slate-50 flex items-center gap-4">
+                      <span className="text-sm font-medium text-slate-700">已選取 {selectedRecordUuids.length} 筆</span>
+                      <div className="h-4 w-px bg-slate-300"></div>
+                      <Button variant="secondary" className="gap-2 h-8 bg-white border border-slate-200" onClick={async () => {
+                        const recordsToPrint = records.filter(r => selectedRecordUuids.includes(r.uuid));
+                        const hasSecondResult = recordsToPrint.some(r => r.second_result !== null && r.second_result !== undefined && String(r.second_result).trim() !== '');
+
+                        let choice = 'first';
+                        if (hasSecondResult && ipc) {
+                          const response = await ipc.invoke('show-message-box', {
+                            type: 'question',
+                            title: '選擇列印報告',
+                            message: '偵測到部分紀錄包含二次檢驗結果，請選擇要列印的報告：',
+                            buttons: ['第一次報告', '第二次報告', '全部列印', '取消'],
+                            cancelId: 3
+                          });
+                          if (response === 0) choice = 'first';
+                          else if (response === 1) choice = 'second';
+                          else if (response === 2) choice = 'both';
+                          else return;
+                        }
+                        handlePrint(recordsToPrint, choice as 'first' | 'second' | 'both');
+                      }}>
+                        <Printer className="h-4 w-4" /> 列印選取
+                      </Button>
+                      <Button variant="secondary" className="gap-2 h-8 bg-white border border-slate-200" onClick={() => handleOpenExportDialog('selected')}>
+                        <FileOutput className="h-4 w-4" /> 匯出選取
+                      </Button>
+                      {records.filter(r => selectedRecordUuids.includes(r.uuid)).every(r => Number(r.is_exported) === 1) && (
+                        <Button variant="secondary" className="gap-2 h-8 bg-red-50 text-red-700 border border-red-200 hover:bg-red-100" onClick={() => handleOpenExportDialog('selected_del')}>
+                          <Trash2 className="h-4 w-4" /> 匯出欲刪除資料
+                        </Button>
+                      )}
+                    </div>
+                  )}
 
 
                   {/* Advanced Search Dialog */}
@@ -1962,7 +1963,7 @@ export default function App() {
                     <Label>匯出格式</Label>
                     <select
                       className="flex h-10 w-full rounded-md border border-slate-200 bg-white px-3"
-                      value={settings.export_format || 'fixed'}
+                      value={settings.export_format || 'csv'}
                       onChange={(e: any) => setSettings({ ...settings, export_format: e.target.value })}
                     >
                       <option value="fixed">資料以總長匯出 (預設)</option>
