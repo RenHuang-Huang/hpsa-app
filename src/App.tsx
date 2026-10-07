@@ -142,6 +142,7 @@ const Badge = ({ variant, children, ...props }: any) => {
 // --- Schemas ---
 import { formSchema } from './schema';
 import { getPrintTemplate } from './printTemplate';
+import { getManagementPrintBody, managementPrintStyles } from './managementPrintTemplate';
 import { isValidTaiwanID } from './lib/validators';
 import { getBillingTemplate, BillingItem } from "./billingTemplate";
 import reagentsData from './resources/reagents.json';
@@ -768,6 +769,7 @@ export default function App() {
       // Save new settings
       await ipc.invoke('save-setting', { key: 'default_lab_name', value: settings.default_lab_name });
       await ipc.invoke('save-setting', { key: 'print_title_source', value: settings.print_title_source });
+      await ipc.invoke('save-setting', { key: 'print_management_form', value: settings.print_management_form === '0' ? '0' : '1' });
       await ipc.invoke('save-setting', { key: 'export_format', value: settings.export_format });
 
       await ipc.invoke('show-alert', { message: '設定已儲存' });
@@ -1049,7 +1051,7 @@ export default function App() {
         typesToGen.push('first'); // Default to 'first'
       }
 
-      return typesToGen.map(type => {
+      const reports = typesToGen.map(type => {
         const targetResult = type === 'second' ? r.second_result : r.result;
         const targetLabDate = type === 'second' ? r.second_lab_date : r.lab_date;
         const targetOutpatientDate = type === 'second' ? r.second_outpatient_date : r.outpatient_date;
@@ -1073,11 +1075,16 @@ export default function App() {
           birth: formatRoc(r.birth_date),
           visit: formatRoc(targetOutpatientDate),
         };
-        return getPrintTemplate(repo);
+        return getPrintTemplate(repo, { autoPrint: false }).match(/<body>([\s\S]*?)<\/body>/)?.[1] || '';
       });
+      if (settings.print_management_form !== '0') {
+        reports.push(getManagementPrintBody(r, hospital?.name || r.hospital_id || '', settings.default_lab_name || ''));
+      }
+      return reports;
     }).join('');
 
-    printWindow.document.write(pagesHtml);
+    const styles = getPrintTemplate({}, { autoPrint: false }).match(/<style>([\s\S]*?)<\/style>/)?.[1] || '';
+    printWindow.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>檢驗報告</title><style>${styles}${settings.print_management_form !== '0' ? managementPrintStyles : ''}</style></head><body>${pagesHtml}</body></html>`);
     printWindow.document.close();
     // Trigger print after a short delay to allow rendering
     setTimeout(async () => {
@@ -1865,6 +1872,23 @@ export default function App() {
                       <option value="hospital">依醫療院所名稱</option>
                       <option value="lab">依檢驗所名稱</option>
                     </select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="print-management-form">列印時一併印出管理紀錄表</Label>
+                    <div className="flex items-center gap-3">
+                      <button
+                        id="print-management-form"
+                        type="button"
+                        role="switch"
+                        aria-checked={settings.print_management_form !== '0'}
+                        onClick={() => setSettings({ ...settings, print_management_form: settings.print_management_form === '0' ? '1' : '0' })}
+                        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 ${settings.print_management_form !== '0' ? 'bg-indigo-600' : 'bg-slate-300'}`}
+                      >
+                        <span className={`h-5 w-5 rounded-full bg-white shadow transition-transform ${settings.print_management_form !== '0' ? 'translate-x-5' : 'translate-x-1'}`} />
+                      </button>
+                      <span className="text-sm text-slate-600">{settings.print_management_form !== '0' ? '開啟' : '關閉'}</span>
+                    </div>
+                    <p className="text-xs text-slate-500">開啟時，每筆原報告後附加半張 A4 管理紀錄表。調整後請儲存設定。</p>
                   </div>
                   <div className="space-y-2">
                     <Label>預設檢驗機構代碼</Label>
